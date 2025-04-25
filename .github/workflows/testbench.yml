@@ -1,0 +1,23 @@
+---
+env:
+  TB_ENTITY: ALU_tb
+
+name: GHDL Testbench
+on: [push]
+jobs:
+  Execute-Testbench:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Setup GHDL nightly
+        uses: ghdl/setup-ghdl@v1
+        with:
+          backend: mcode
+          investigate: true
+      - run: ghdl --version
+      - name: Execute the VHDL testbench
+        run: |
+          ghdl analyze -v src/*.vhd
+          ghdl elaborate -v $TB_ENTITY
+          ghdl run -v $TB_ENTITY --stop-time=75ns --assert-level=error
