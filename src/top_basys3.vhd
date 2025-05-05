@@ -97,13 +97,6 @@ architecture top_basys3_arch of top_basys3 is
         );
     end component;
     
-    component sevenseg_decoder is
-        port (
-            i_hex    : in std_logic_vector(3 downto 0);
-            o_seg    : out std_logic_vector(6 downto 0)
-        );
-    end component;
-    
     -- Button debounce and synchronization signals
     signal btnC_sync1     : std_logic := '0';
     signal btnC_sync2     : std_logic := '0';
@@ -141,9 +134,6 @@ architecture top_basys3_arch of top_basys3 is
     signal display_an     : std_logic_vector(3 downto 0);
     signal mod_display_an : std_logic_vector(3 downto 0);
     
-    -- Segment display signals
-    signal normal_seg     : std_logic_vector(6 downto 0);
-    
     -- Flag signals remapped
     signal neg_flag, zero_flag, carry_flag, overflow_flag : std_logic;
     signal stored_op : std_logic_vector(2 downto 0) := (others => '0');
@@ -155,7 +145,7 @@ begin
     -- Clock divider (100MHz to 4Hz)
     -- 100MHz / (2 * 12500000) = 4Hz
     clock_div_inst: clock_divider
-        generic map ( k_DIV => 50000 )
+        generic map ( k_DIV => 125000 )
         port map (
             i_clk   => clk,
             i_reset => btnL,
@@ -214,13 +204,6 @@ begin
             o_sel   => display_an
         );
     
-    -- Connect 7-segment decoder
-    sevenseg_inst: sevenseg_decoder
-        port map (
-            i_hex => display_digit,
-            o_seg => normal_seg
-        );
-    
     -- CONCURRENT STATEMENTS ----------------------------
     
     -- Handle the minus sign display - always use blank (0xF) unless negative in RESULT state
@@ -257,11 +240,35 @@ begin
     
     -- PROCESSES ----------------------------------------
     
-    -- Segment handling process - VHDL-93 compatible version using if-then-else
+    -- Combined Seven-Segment Decoder and segment handling process
     process(display_digit, display_an, is_negative, fsm_cycle)
+        variable decoded_segments : std_logic_vector(6 downto 0);
     begin
-        -- By default, use the output from the sevenseg_decoder
-        seg <= normal_seg;
+        -- First, decode the hex value to 7-segment pattern (from sevenseg_decoder)
+        -- 7-segment display is active LOW (0 turns segment ON)
+        -- Segment mapping: decoded_segments(6 downto 0) = gfedcba
+        case display_digit is
+            when "0000" => decoded_segments := "1000000"; -- 0
+            when "0001" => decoded_segments := "1111001"; -- 1
+            when "0010" => decoded_segments := "0100100"; -- 2
+            when "0011" => decoded_segments := "0110000"; -- 3
+            when "0100" => decoded_segments := "0011001"; -- 4
+            when "0101" => decoded_segments := "0010010"; -- 5
+            when "0110" => decoded_segments := "0000010"; -- 6
+            when "0111" => decoded_segments := "1111000"; -- 7
+            when "1000" => decoded_segments := "0000000"; -- 8
+            when "1001" => decoded_segments := "0010000"; -- 9
+            when "1010" => decoded_segments := "0001000"; -- A
+            when "1011" => decoded_segments := "0000011"; -- b
+            when "1100" => decoded_segments := "1000110"; -- C
+            when "1101" => decoded_segments := "0100001"; -- d
+            when "1110" => decoded_segments := "0000110"; -- E
+            when "1111" => decoded_segments := "0001110"; -- F
+            when others => decoded_segments := "1111111"; -- All segments off
+        end case;
+        
+        -- By default, use the decoded segments
+        seg <= decoded_segments;
         
         -- Special handling for leftmost digit when we need to show dash
         if display_an = "0111" and fsm_cycle = STATE_RESULT and is_negative = '1' then
@@ -331,6 +338,7 @@ begin
             end if;
         end if;
     end process;
+
     -- Display data selection process
     process(fsm_cycle, op_A, op_B, alu_result)
     begin
