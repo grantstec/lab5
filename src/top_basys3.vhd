@@ -104,30 +104,6 @@ architecture top_basys3_arch of top_basys3 is
         );
     end component;
     
-    -- Function to convert 4-bit binary to 7-segment display
-    function sevenseg_decode(hex : std_logic_vector(3 downto 0)) return std_logic_vector is
-    begin
-        case hex is
-            when "0000" => return "1000000"; -- 0
-            when "0001" => return "1111001"; -- 1
-            when "0010" => return "0100100"; -- 2
-            when "0011" => return "0110000"; -- 3
-            when "0100" => return "0011001"; -- 4
-            when "0101" => return "0010010"; -- 5
-            when "0110" => return "0000010"; -- 6
-            when "0111" => return "1111000"; -- 7
-            when "1000" => return "0000000"; -- 8
-            when "1001" => return "0010000"; -- 9
-            when "1010" => return "0001000"; -- A
-            when "1011" => return "0000011"; -- b
-            when "1100" => return "1000110"; -- C
-            when "1101" => return "0100001"; -- d
-            when "1110" => return "0000110"; -- E
-            when "1111" => return "0001110"; -- F
-            when others => return "0111111"; -- dash
-        end case;
-    end function;
-    
     -- Button debounce and synchronization signals
     signal btnC_sync1     : std_logic := '0';
     signal btnC_sync2     : std_logic := '0';
@@ -212,16 +188,20 @@ begin
             o_sel   => an
         );
     
+    -- Connect the seven-segment decoder (matching Lab4 approach)
+    sevenseg_decoder_inst: sevenseg_decoder
+        port map (
+            i_hex => display_digit,
+            o_seg => seg
+        );
+    
     -- CONCURRENT STATEMENTS ----------------------------
     
     -- Handle the minus sign display
     -- Use the minus sign (dash) for negative numbers
     digit_sign <= "1111" when is_negative = '1' else  -- Display dash for negative
                   "1111";                            -- Otherwise blank
-    
-    -- Convert 4-bit binary digit to 7-segment display pattern using the function
-    seg <= sevenseg_decode(display_digit);
-    
+        
     -- Map FSM state to lower 4 LEDs and ALU flags to upper 4 LEDs
     led(3 downto 0) <= fsm_cycle;
     led(15 downto 12) <= alu_flags;
@@ -292,36 +272,3 @@ begin
     end process;
     
 end top_basys3_arch;
-
--- Sevenseg_decoder implementation in a separate architecture unit
--- This allows test benches to reference it
-library ieee;
-use ieee.std_logic_1164.all;
-
-entity sevenseg_decoder is
-    Port ( i_hex : in STD_LOGIC_VECTOR (3 downto 0);
-           o_seg : out STD_LOGIC_VECTOR (6 downto 0));
-end sevenseg_decoder;
-
-architecture Behavioral of sevenseg_decoder is
-begin
-    -- 7-segment display decoder (active-low outputs)
-    with i_hex select
-        o_seg <= "1000000" when x"0",   -- 0
-                 "1111001" when x"1",   -- 1
-                 "0100100" when x"2",   -- 2
-                 "0110000" when x"3",   -- 3
-                 "0011001" when x"4",   -- 4
-                 "0010010" when x"5",   -- 5
-                 "0000010" when x"6",   -- 6
-                 "1111000" when x"7",   -- 7
-                 "0000000" when x"8",   -- 8
-                 "0010000" when x"9",   -- 9
-                 "0001000" when x"A",   -- A
-                 "0000011" when x"B",   -- b
-                 "1000110" when x"C",   -- C
-                 "0100001" when x"D",   -- d
-                 "0000110" when x"E",   -- E
-                 "0001110" when x"F",   -- F
-                 "0111111" when others; -- dash (default)
-end Behavioral;
