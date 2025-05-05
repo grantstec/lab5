@@ -155,7 +155,7 @@ begin
     -- Clock divider (100MHz to 4Hz)
     -- 100MHz / (2 * 12500000) = 4Hz
     clock_div_inst: clock_divider
-        generic map ( k_DIV => 12500000 )
+        generic map ( k_DIV => 50000 )
         port map (
             i_clk   => clk,
             i_reset => btnL,
