@@ -140,6 +140,8 @@ architecture top_basys3_arch of top_basys3 is
     signal digit_sign     : std_logic_vector(3 downto 0);
     signal display_digit  : std_logic_vector(3 downto 0);
     signal segment_data   : std_logic_vector(6 downto 0);
+    signal fsm_state : STD_LOGIC_VECTOR(3 downto 0) := "0001"; -- Default to IDLE
+
     
 begin
     -- PORT MAPS ----------------------------------------
@@ -236,22 +238,48 @@ begin
                 display_data <= (others => '0');
         end case;
     end process;
-    
-    -- Process for capturing operands based on FSM state
+-- Add a new state register in top_basys3
+
+    -- In the process that captures operands based on FSM state
+    -- Add state transition logic
     process(slow_clk, btnU)
     begin
         if btnU = '1' then
-            -- Reset operand registers
+            -- Reset operand registers and FSM state
             op_A <= (others => '0');
             op_B <= (others => '0');
+            fsm_state <= "0001"; -- IDLE state
         elsif rising_edge(slow_clk) then
-            -- Store operands based on FSM state
-            if fsm_cycle = "0010" then
-                op_A <= sw(7 downto 0);
-            elsif fsm_cycle = "0100" then
-                op_B <= sw(7 downto 0);
-            end if;
+            -- State transitions based on FSM cycle output
+            case fsm_state is
+                when "0001" => -- IDLE state
+                    if btnC = '1' then
+                        fsm_state <= "0010"; -- Move to OP1 state
+                    end if;
+                    
+                when "0010" => -- OP1 state
+                    -- Store operand A
+                    op_A <= sw(7 downto 0);
+                    if btnC = '1' then
+                        fsm_state <= "0100"; -- Move to OP2 state
+                    end if;
+                    
+                when "0100" => -- OP2 state
+                    -- Store operand B
+                    op_B <= sw(7 downto 0);
+                    if btnC = '1' then
+                        fsm_state <= "1000"; -- Move to RESULT state
+                    end if;
+                    
+                when "1000" => -- RESULT state
+                    if btnC = '1' then
+                        fsm_state <= "0001"; -- Return to IDLE state
+                    end if;
+                    
+                when others =>
+                    fsm_state <= "0001"; -- Default to IDLE for safety
+            end case;
         end if;
     end process;
-    
+            
 end top_basys3_arch;
