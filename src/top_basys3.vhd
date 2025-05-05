@@ -21,10 +21,10 @@
 --|
 --+----------------------------------------------------------------------------
 library ieee;
-  use ieee.std_logic_1164.all;
-  use ieee.numeric_std.all;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
-
+-- Top-level module
 entity top_basys3 is
     port(
         -- inputs
@@ -97,8 +97,15 @@ architecture top_basys3_arch of top_basys3 is
         );
     end component;
     
+    component sevenseg_decoder is
+        port (
+            i_hex    : in std_logic_vector(3 downto 0);
+            o_seg    : out std_logic_vector(6 downto 0)
+        );
+    end component;
+    
     -- Function to convert 4-bit binary to 7-segment display
-    function sevenseg_decoder(hex : std_logic_vector(3 downto 0)) return std_logic_vector is
+    function sevenseg_decode(hex : std_logic_vector(3 downto 0)) return std_logic_vector is
     begin
         case hex is
             when "0000" => return "1000000"; -- 0
@@ -121,9 +128,19 @@ architecture top_basys3_arch of top_basys3 is
         end case;
     end function;
     
-    -- Signals
+    -- Button debounce and synchronization signals
+    signal btnC_sync1     : std_logic := '0';
+    signal btnC_sync2     : std_logic := '0';
+    signal btnC_debounced : std_logic := '0';
+    
     -- Clocking
     signal slow_clk       : std_logic;
+    
+    -- State constants (one-hot encoding)
+    constant STATE_CLEAR  : std_logic_vector(3 downto 0) := "0001";  -- S0
+    constant STATE_OP1    : std_logic_vector(3 downto 0) := "0010";  -- S1
+    constant STATE_OP2    : std_logic_vector(3 downto 0) := "0100";  -- S2
+    constant STATE_RESULT : std_logic_vector(3 downto 0) := "1000";  -- S3
     
     -- CPU signals
     signal fsm_cycle      : std_logic_vector(3 downto 0);
@@ -139,9 +156,6 @@ architecture top_basys3_arch of top_basys3 is
     signal digit_ones     : std_logic_vector(3 downto 0);
     signal digit_sign     : std_logic_vector(3 downto 0);
     signal display_digit  : std_logic_vector(3 downto 0);
-    signal segment_data   : std_logic_vector(6 downto 0);
-    signal fsm_state : STD_LOGIC_VECTOR(3 downto 0) := "0001"; -- Default to IDLE
-
     
 begin
     -- PORT MAPS ----------------------------------------
@@ -160,7 +174,7 @@ begin
     controller_fsm_inst: controller_fsm
         port map (
             i_reset => btnU,
-            i_adv   => btnC,
+            i_adv   => btnC_debounced,
             o_cycle => fsm_cycle
         );
     
@@ -200,11 +214,13 @@ begin
     
     -- CONCURRENT STATEMENTS ----------------------------
     
-    -- Convert 4-bit binary digit to 7-segment display pattern
-    segment_data <= sevenseg_decoder(display_digit);
+    -- Handle the minus sign display
+    -- Use the minus sign (dash) for negative numbers
+    digit_sign <= "1111" when is_negative = '1' else  -- Display dash for negative
+                  "1111";                            -- Otherwise blank
     
-    -- Output to 7-segment display
-    seg <= segment_data;
+    -- Convert 4-bit binary digit to 7-segment display pattern using the function
+    seg <= sevenseg_decode(display_digit);
     
     -- Map FSM state to lower 4 LEDs and ALU flags to upper 4 LEDs
     led(3 downto 0) <= fsm_cycle;
@@ -212,74 +228,100 @@ begin
     -- Ground unused LEDs
     led(11 downto 4) <= (others => '0');
     
-    -- Process for determining the sign display digit
-    digit_sign <= "1111" when is_negative = '1' else "1111"; -- Display dash or blank for negative
+    -- PROCESSES ----------------------------------------
     
-    -- Process for selecting what data to display based on FSM state
+    -- Button debounce/synchronization process 
+    process(slow_clk, btnU)
+    begin
+        if btnU = '1' then
+            btnC_sync1 <= '0';
+            btnC_sync2 <= '0';
+            btnC_debounced <= '0';
+        elsif rising_edge(slow_clk) then
+            -- Two-stage synchronizer
+            btnC_sync1 <= btnC;
+            btnC_sync2 <= btnC_sync1;
+            
+            -- Debounced signal (simple synchronizer with slow clock)
+            btnC_debounced <= btnC_sync2;
+        end if;
+    end process;
+    
+    -- Operand capture process
+    process(slow_clk, btnU)
+    begin
+        if btnU = '1' then
+            op_A <= (others => '0');
+            op_B <= (others => '0');
+        elsif rising_edge(slow_clk) then
+            -- Capture operands based on current state
+            case fsm_cycle is
+                when STATE_OP1 =>
+                    op_A <= sw(7 downto 0);
+                when STATE_OP2 =>
+                    op_B <= sw(7 downto 0);
+                when others =>
+                    -- Do nothing in other states
+            end case;
+        end if;
+    end process;
+    
+    -- Display data selection process
     process(fsm_cycle, sw, op_A, op_B, alu_result)
     begin
-        -- Default blank display
+        -- Default: blank display
         display_data <= (others => '0');
         
+        -- Select data to display based on current state
         case fsm_cycle is
-            when "0001" => -- IDLE state - clear display
+            when STATE_CLEAR =>
                 display_data <= (others => '0');
                 
-            when "0010" => -- OP1 state - display operand 1
+            when STATE_OP1 =>
                 display_data <= sw(7 downto 0);
                 
-            when "0100" => -- OP2 state - display operand 2
+            when STATE_OP2 =>
                 display_data <= sw(7 downto 0);
                 
-            when "1000" => -- RESULT state - display ALU result
+            when STATE_RESULT =>
                 display_data <= alu_result;
                 
             when others =>
                 display_data <= (others => '0');
         end case;
     end process;
--- Add a new state register in top_basys3
-
-    -- In the process that captures operands based on FSM state
-    -- Add state transition logic
-    process(slow_clk, btnU)
-    begin
-        if btnU = '1' then
-            -- Reset operand registers and FSM state
-            op_A <= (others => '0');
-            op_B <= (others => '0');
-            fsm_state <= "0001"; -- IDLE state
-        elsif rising_edge(slow_clk) then
-            -- State transitions based on FSM cycle output
-            case fsm_state is
-                when "0001" => -- IDLE state
-                    if btnC = '1' then
-                        fsm_state <= "0010"; -- Move to OP1 state
-                    end if;
-                    
-                when "0010" => -- OP1 state
-                    -- Store operand A
-                    op_A <= sw(7 downto 0);
-                    if btnC = '1' then
-                        fsm_state <= "0100"; -- Move to OP2 state
-                    end if;
-                    
-                when "0100" => -- OP2 state
-                    -- Store operand B
-                    op_B <= sw(7 downto 0);
-                    if btnC = '1' then
-                        fsm_state <= "1000"; -- Move to RESULT state
-                    end if;
-                    
-                when "1000" => -- RESULT state
-                    if btnC = '1' then
-                        fsm_state <= "0001"; -- Return to IDLE state
-                    end if;
-                    
-                when others =>
-                    fsm_state <= "0001"; -- Default to IDLE for safety
-            end case;
-        end if;
-    end process;
-            
+    
 end top_basys3_arch;
+
+-- Sevenseg_decoder implementation in a separate architecture unit
+-- This allows test benches to reference it
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity sevenseg_decoder is
+    Port ( i_hex : in STD_LOGIC_VECTOR (3 downto 0);
+           o_seg : out STD_LOGIC_VECTOR (6 downto 0));
+end sevenseg_decoder;
+
+architecture Behavioral of sevenseg_decoder is
+begin
+    -- 7-segment display decoder (active-low outputs)
+    with i_hex select
+        o_seg <= "1000000" when x"0",   -- 0
+                 "1111001" when x"1",   -- 1
+                 "0100100" when x"2",   -- 2
+                 "0110000" when x"3",   -- 3
+                 "0011001" when x"4",   -- 4
+                 "0010010" when x"5",   -- 5
+                 "0000010" when x"6",   -- 6
+                 "1111000" when x"7",   -- 7
+                 "0000000" when x"8",   -- 8
+                 "0010000" when x"9",   -- 9
+                 "0001000" when x"A",   -- A
+                 "0000011" when x"B",   -- b
+                 "1000110" when x"C",   -- C
+                 "0100001" when x"D",   -- d
+                 "0000110" when x"E",   -- E
+                 "0001110" when x"F",   -- F
+                 "0111111" when others; -- dash (default)
+end Behavioral;
