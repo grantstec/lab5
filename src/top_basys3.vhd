@@ -146,7 +146,8 @@ architecture top_basys3_arch of top_basys3 is
     
     -- Flag signals remapped
     signal neg_flag, zero_flag, carry_flag, overflow_flag : std_logic;
-    
+    signal stored_op : std_logic_vector(2 downto 0) := (others => '0');
+
 begin
     -- PORT MAPS ----------------------------------------
     
@@ -178,12 +179,12 @@ begin
             o_cycle => fsm_cycle
         );
     
-    -- ALU
+    -- In the ALU port map, use the stored operation instead of direct switches
     alu_inst: ALU
         port map (
             i_A      => op_A,
             i_B      => op_B,
-            i_op     => sw(2 downto 0),
+            i_op     => stored_op,  -- Use stored operation instead of sw(2 downto 0)
             o_result => alu_result,
             o_flags  => alu_flags
         );
@@ -297,20 +298,28 @@ begin
     process(slow_clk, btnU)
     begin
         if btnU = '1' then
-            -- Reset operands
+            -- Reset operands and operation
             op_A <= (others => '0');
             op_B <= (others => '0');
+            stored_op <= (others => '0');
         elsif rising_edge(slow_clk) then
-            -- On button press, transition between states and capture values
+            -- On button press, capture values BEFORE the state transition occurs
             if btnC_edge = '1' then
                 case fsm_cycle is
                     when STATE_CLEAR => 
-                        -- When transitioning from CLEAR to OP1, capture current switches for op_A
+                        -- Capture current switches for op_A when in CLEAR state
+                        -- (this will be displayed in OP1 state)
                         op_A <= sw(7 downto 0);
                         
                     when STATE_OP1 =>
-                        -- When transitioning from OP1 to OP2, capture current switches for op_B
+                        -- Capture current switches for op_B when in OP1 state
+                        -- (this will be displayed in OP2 state)
                         op_B <= sw(7 downto 0);
+                        
+                    when STATE_OP2 =>
+                        -- Capture operation when in OP2 state
+                        -- (this will be used in RESULT state)
+                        stored_op <= sw(2 downto 0);
                         
                     when others =>
                         -- No capture in other states
@@ -348,5 +357,5 @@ begin
                 display_data <= (others => '0');
         end case;
     end process;
-    
+        
 end top_basys3_arch;
