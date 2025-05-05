@@ -147,6 +147,7 @@ architecture top_basys3_arch of top_basys3 is
     -- Flag signals remapped
     signal neg_flag, zero_flag, carry_flag, overflow_flag : std_logic;
     signal stored_op : std_logic_vector(2 downto 0) := (others => '0');
+    signal delayed_btnC_edge : std_logic := '0';
 
 begin
     -- PORT MAPS ----------------------------------------
@@ -269,7 +270,7 @@ begin
         end if;
     end process;
     
-    -- Button edge detection process 
+    -- Button edge detection process
     process(slow_clk, btnU)
     begin
         if btnU = '1' then
@@ -278,6 +279,7 @@ begin
             btnC_debounced <= '0';
             btnC_prev <= '0';
             btnC_edge <= '0';
+            delayed_btnC_edge <= '0';
         elsif rising_edge(slow_clk) then
             -- Two-stage synchronizer for button
             btnC_sync1 <= btnC;
@@ -286,6 +288,10 @@ begin
             
             -- Edge detection (rising edge only)
             btnC_prev <= btnC_debounced;
+            
+            -- Delay btnC_edge by one cycle
+            delayed_btnC_edge <= btnC_edge;
+            
             if btnC_debounced = '1' and btnC_prev = '0' then
                 btnC_edge <= '1';
             else
@@ -294,7 +300,7 @@ begin
         end if;
     end process;
     
-    -- State transition and operand capture process
+    -- Operand capture process
     process(slow_clk, btnU)
     begin
         if btnU = '1' then
@@ -303,22 +309,19 @@ begin
             op_B <= (others => '0');
             stored_op <= (others => '0');
         elsif rising_edge(slow_clk) then
-            -- On button press, capture values BEFORE the state transition occurs
-            if btnC_edge = '1' then
+            -- On delayed button press, capture values from switches
+            if delayed_btnC_edge = '1' then
                 case fsm_cycle is
-                    when STATE_CLEAR => 
-                        -- Capture current switches for op_A when in CLEAR state
-                        -- (this will be displayed in OP1 state)
+                    when STATE_OP1 => 
+                        -- We're now in OP1, capture op_A
                         op_A <= sw(7 downto 0);
                         
-                    when STATE_OP1 =>
-                        -- Capture current switches for op_B when in OP1 state
-                        -- (this will be displayed in OP2 state)
+                    when STATE_OP2 =>
+                        -- We're now in OP2, capture op_B
                         op_B <= sw(7 downto 0);
                         
-                    when STATE_OP2 =>
-                        -- Capture operation when in OP2 state
-                        -- (this will be used in RESULT state)
+                    when STATE_RESULT =>
+                        -- We're now in RESULT, capture operation
                         stored_op <= sw(2 downto 0);
                         
                     when others =>
@@ -328,7 +331,6 @@ begin
             end if;
         end if;
     end process;
-    
     -- Display data selection process
     process(fsm_cycle, op_A, op_B, alu_result)
     begin
