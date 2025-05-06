@@ -23,14 +23,14 @@ architecture Behavioral of ALU is
                Cout : out STD_LOGIC);
     end component;
     
-    signal w_B : STD_LOGIC_VECTOR (7 downto 0);  -- Modified B input for subtraction
-    signal w_Cin : STD_LOGIC;                    -- Carry in for first adder
-    signal w_Cout_low : STD_LOGIC;               -- Carry out from lower adder
-    signal w_Cout_high : STD_LOGIC;              -- Carry out from higher adder
-    signal w_Sum : STD_LOGIC_VECTOR (7 downto 0); -- Addition/subtraction result
-    signal w_And : STD_LOGIC_VECTOR (7 downto 0); -- AND result
-    signal w_Or : STD_LOGIC_VECTOR (7 downto 0);  -- OR result
-    signal result_out : STD_LOGIC_VECTOR (7 downto 0); -- Final result
+    signal w_B : STD_LOGIC_VECTOR (7 downto 0);
+    signal w_Cin : STD_LOGIC;
+    signal w_Cout_low : STD_LOGIC;
+    signal w_Cout_high : STD_LOGIC;
+    signal w_Sum : STD_LOGIC_VECTOR (7 downto 0);
+    signal w_And : STD_LOGIC_VECTOR (7 downto 0);
+    signal w_Or : STD_LOGIC_VECTOR (7 downto 0);
+    signal result_out : STD_LOGIC_VECTOR (7 downto 0);
     
     signal N_flag : std_logic;  -- Negative
     signal Z_flag : std_logic;  -- Zero
@@ -62,36 +62,27 @@ begin
     w_And <= i_A and i_B;
     w_Or <= i_A or i_B;
     
-    process(i_op, w_Sum, w_And, w_Or)
-    begin
-        case i_op is
-            when OP_ADD | OP_SUB =>
-                result_out <= w_Sum;
-            when OP_AND =>
-                result_out <= w_And;
-            when OP_OR =>
-                result_out <= w_Or;
-            when others =>
-                result_out <= w_Sum;  
-        end case;
-    end process;
-        
+    with i_op select
+    result_out <= w_Sum when OP_ADD | OP_SUB,
+                 w_And when OP_AND,
+                 w_Or when OP_OR,
+                 w_Sum when others;
+    
     N_flag <= result_out(7);
     
     Z_flag <= '1' when result_out = "00000000" else '0';
     
-    C_flag <= w_Cout_high when (i_op = OP_ADD) else
-              not w_Cout_high when (i_op = OP_SUB) else 
+    C_flag <= w_Cout_high when i_op = OP_ADD else
+              w_Cout_high when i_op = OP_SUB else  
               '0';  
-    
-    process(i_op, i_A, i_B, result_out, w_B)
+    process(i_op, i_A, w_B, result_out)
     begin
         if i_op = OP_ADD then
-            V_flag <= (i_A(7) and i_B(7) and not result_out(7)) or 
-                     (not i_A(7) and not i_B(7) and result_out(7));
+            V_flag <= (not i_A(7) and not w_B(7) and result_out(7)) or 
+                      (i_A(7) and w_B(7) and not result_out(7));
         elsif i_op = OP_SUB then
-            V_flag <= (i_A(7) and not i_B(7) and not result_out(7)) or 
-                     (not i_A(7) and i_B(7) and result_out(7));
+            V_flag <= (not i_A(7) and w_B(7) and result_out(7)) or 
+                      (i_A(7) and not w_B(7) and not result_out(7));
         else
             V_flag <= '0';
         end if;
