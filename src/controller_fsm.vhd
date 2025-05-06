@@ -1,4 +1,3 @@
-----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
@@ -9,16 +8,13 @@ entity controller_fsm is
 end controller_fsm;
 
 architecture FSM of controller_fsm is
-    -- Define state encoding constants (one-hot encoding)
     constant STATE_CLEAR  : std_logic_vector(3 downto 0) := "0001";  -- S0
     constant STATE_OP1    : std_logic_vector(3 downto 0) := "0010";  -- S1
     constant STATE_OP2    : std_logic_vector(3 downto 0) := "0100";  -- S2
     constant STATE_RESULT : std_logic_vector(3 downto 0) := "1000";  -- S3
     
-    -- Define state register that will store the current state
     signal current_state : std_logic_vector(3 downto 0) := STATE_CLEAR;
 begin
-    -- State transition process
     process(i_reset, i_adv)
     begin
         if i_reset = '1' then

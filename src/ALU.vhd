@@ -1,24 +1,3 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 04/18/2025 02:50:18 PM
--- Design Name: 
--- Module Name: ALU - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 8-bit ALU implementing add, subtract, AND, and OR operations
---              with NZCV flags based on DDCA-RISC-V Fig. 5.17
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
@@ -52,36 +31,30 @@ architecture Behavioral of ALU is
     signal V_flag : std_logic;  -- Overflow
     
 begin
-    -- Calculate results for all operations in parallel
-    -- Add operation (with carry)
+    
     result_add <= std_logic_vector('0' & unsigned(i_A) + unsigned(i_B));
     
-    -- Subtract operation (A - B)
     result_sub <= std_logic_vector('0' & unsigned(i_A) - unsigned(i_B));        
-    -- Logical AND
+    
     result_and <= i_A and i_B;
     
-    -- Logical OR
     result_or <= i_A or i_B;
     
-    -- MUX to select the correct result based on operation
     process(i_op, result_add, result_sub, result_and, result_or)
     begin
         case i_op is
             when OP_ADD =>
                 result_out <= result_add(7 downto 0);
                 C_flag <= result_add(8);
-                -- Overflow detection for signed addition
                 V_flag <= (i_A(7) and i_B(7) and not result_add(7)) or 
                          (not i_A(7) and not i_B(7) and result_add(7));
                 
             when OP_SUB =>
                 result_out <= result_sub(7 downto 0);
-                C_flag <= not result_sub(8); -- For subtraction, carry is inverted (1 means no borrow)
-                -- Overflow detection for signed subtraction
+                C_flag <= not result_sub(8); 
                 V_flag <= (i_A(7) and not i_B(7) and not result_sub(7)) or 
                          (not i_A(7) and i_B(7) and result_sub(7));
-                
+ 
             when OP_AND =>
                 result_out <= result_and;
                 C_flag <= '0';
@@ -93,21 +66,17 @@ begin
                 V_flag <= '0';
                 
             when others =>
-                -- Default to ADD for undefined operations
                 result_out <= result_add(7 downto 0);
                 C_flag <= '0';
                 V_flag <= '0';
         end case;
     end process;
     
-    -- Set the negative flag based on the MSB of the result
     N_flag <= result_out(7);
     
-    -- Set the zero flag if result is all zeros
     Z_flag <= '1' when result_out = "00000000" else '0';
     
-    -- Output assignments
     o_result <= result_out;
-    o_flags <= N_flag & Z_flag & C_flag & V_flag; -- NZCV format
+    o_flags <= N_flag & Z_flag & C_flag & V_flag; 
     
 end Behavioral;
