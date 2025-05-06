@@ -142,8 +142,6 @@ architecture top_basys3_arch of top_basys3 is
 begin
     -- PORT MAPS ----------------------------------------
     
-    -- Clock divider (100MHz to 4Hz)
-    -- 100MHz / (2 * 12500000) = 4Hz
     clock_div_inst: clock_divider
         generic map ( k_DIV => 125000 )
         port map (
@@ -152,8 +150,6 @@ begin
             o_clk   => slow_clk
         );
     
-    -- TDM clock divider (100MHz to 1kHz)
-    -- 100MHz / (2 * 50000) = 1kHz
     tdm_clock_div: clock_divider
         generic map ( k_DIV => 50000 )
         port map (
@@ -175,7 +171,7 @@ begin
         port map (
             i_A      => op_A,
             i_B      => op_B,
-            i_op     => stored_op,  -- Use stored operation instead of sw(2 downto 0)
+            i_op     => stored_op, 
             o_result => alu_result,
             o_flags  => alu_flags
         );
@@ -244,9 +240,6 @@ begin
     process(display_digit, display_an, is_negative, fsm_cycle)
         variable decoded_segments : std_logic_vector(6 downto 0);
     begin
-        -- First, decode the hex value to 7-segment pattern (from sevenseg_decoder)
-        -- 7-segment display is active LOW (0 turns segment ON)
-        -- Segment mapping: decoded_segments(6 downto 0) = gfedcba
         case display_digit is
             when "0000" => decoded_segments := "1000000"; -- 0
             when "0001" => decoded_segments := "1111001"; -- 1
@@ -270,9 +263,7 @@ begin
         -- By default, use the decoded segments
         seg <= decoded_segments;
         
-        -- Special handling for leftmost digit when we need to show dash
         if display_an = "0111" and fsm_cycle = STATE_RESULT and is_negative = '1' then
-            -- Override with dash pattern (just middle segment on)
             seg <= "0111111";
         end if;
     end process;

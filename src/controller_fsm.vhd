@@ -22,10 +22,8 @@ begin
     process(i_reset, i_adv)
     begin
         if i_reset = '1' then
-            -- Reset to initial state
             current_state <= STATE_CLEAR;
         elsif rising_edge(i_adv) then
-            -- State transitions on i_adv rising edge
             case current_state is
                 when STATE_CLEAR =>
                     current_state <= STATE_OP1;
@@ -41,6 +39,5 @@ begin
         end if;
     end process;
     
-    -- Output the current state directly
     o_cycle <= current_state;
 end FSM;
